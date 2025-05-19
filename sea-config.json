@@ -1,0 +1,9 @@
+{
+    "main": "dist/index.js",
+    "output": "dist/actual-api.blob",
+    "disableExperimentalSEAWarning": true,
+    "useCodeCache": true,
+    "assets": {
+      "package.json": "package.json"
+    }
+  }

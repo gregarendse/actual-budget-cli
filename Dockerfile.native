@@ -1,0 +1,96 @@
+# Build stage
+FROM node:lts-alpine AS build
+
+WORKDIR /app
+
+RUN apk add --no-cache build-base python3
+
+RUN wget -q -O /etc/apk/keys/sgerrand.rsa.pub https://alpine-pkgs.sgerrand.com/sgerrand.rsa.pub && \
+  wget https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.35-r1/glibc-2.35-r1.apk && \
+  apk add --no-cache glibc-2.35-r1.apk && \
+  rm glibc-2.35-r1.apk
+
+# Copy sea-config.json
+COPY sea-config.json ./
+
+# Copy package files
+COPY package*.json ./
+
+# Copy tsconfig.json
+COPY tsconfig.json ./
+
+# Copy source code
+COPY src/ ./src/
+
+# Install dependencies
+RUN npm install
+
+# Build the project
+RUN npm run build
+
+ENV DIST_DIR=dist
+RUN mkdir -p ${DIST_DIR}
+
+# Create the SEA bundle and verify the file exists and is executable
+RUN node --experimental-sea-config sea-config.json 
+RUN cp $(command -v node) ${DIST_DIR}/node 
+RUN npx postject ${DIST_DIR}/node NODE_SEA_BLOB ${DIST_DIR}/actual-api.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+RUN chmod +x ${DIST_DIR}/node
+# # Strip the binary to remove debug symbols
+RUN strip ${DIST_DIR}/node
+
+# Create directory structure for dependencies
+RUN mkdir -p deps 
+RUN mkdir -p deps/lib64 
+
+  # Copy all required shared libraries
+RUN ldd ${DIST_DIR}/node | grep "=> /" | awk '{print $3}' | xargs -I '{}' cp -L '{}' deps/ 
+# Copy additional required files
+RUN cp /lib/ld-linux-*.so.* deps/ 
+# Create necessary symlinks
+RUN cp /lib/ld-linux-*.so.* deps/lib64/
+
+
+#   ------------------------------------------------------------
+# Final stage
+FROM scratch
+
+COPY --from=build /app/deps /lib/
+# Ensure lib64 exists and has the loader
+COPY --from=build /app/deps/lib64 /lib64/
+# Copy the Node.js SEA executable
+COPY --from=build /app/dist/node /bin/actual-api
+
+
+# Copy the binary from the builder stage
+# COPY --from=builder /app/actual-api /actual-api
+
+# Copy SSL certificates
+# COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+# Set the entrypoint
+ENTRYPOINT ["/bin/actual-api"]
+
+# Required environment variables:
+# DATA_DIR - Directory where budget data will be cached (default: /data)
+# SERVER_URL - URL of the Actual server
+# PASSWORD - Password used to log into the server (can be provided via Docker secret)
+# SYNC_ID - Sync ID for the budget
+
+# To run with Docker secrets:
+# docker run \
+#   -v /path/to/data:/data \
+#   -e DATA_DIR=/data \
+#   -e SERVER_URL=https://actual.arendse.nom.za \
+#   -e SYNC_ID=your_sync_id \
+#   --secret source=actual_password,target=actual_password \
+#   acutal-api
+
+# To run with environment variables:
+# docker run \
+#   -v /path/to/data:/data \
+#   -e DATA_DIR=/data \
+#   -e SERVER_URL=https://actual.arendse.nom.za \
+#   -e PASSWORD=your_password \
+#   -e SYNC_ID=your_sync_id \
+#   acutal-api 

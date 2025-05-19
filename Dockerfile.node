@@ -1,0 +1,50 @@
+FROM node:22-alpine as builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Copy tsconfig.json
+COPY tsconfig.json ./
+
+# Copy source code
+COPY src/ ./src/
+
+# Install dependencies
+RUN npm install
+
+# Build the project
+RUN npm run build
+# RUN npm run bundle
+
+# FROM node:22-alpine
+
+# COPY --from=builder /app/dist/index.bundled.js /app/dist/index.js
+
+# Set the entrypoint
+ENTRYPOINT ["node", "/app/dist/index.js"]
+
+# Required environment variables:
+# DATA_DIR - Directory where budget data will be cached (default: /data)
+# SERVER_URL - URL of the Actual server
+# PASSWORD - Password used to log into the server (can be provided via Docker secret)
+# SYNC_ID - Sync ID for the budget
+
+# To run with Docker secrets:
+# docker run \
+#   -v /path/to/data:/data \
+#   -e DATA_DIR=/data \
+#   -e SERVER_URL=https://actual.arendse.nom.za \
+#   -e SYNC_ID=your_sync_id \
+#   --secret source=actual_password,target=actual_password \
+#   acutal-api
+
+# To run with environment variables:
+# docker run \
+#   -v /path/to/data:/data \
+#   -e DATA_DIR=/data \
+#   -e SERVER_URL=https://actual.arendse.nom.za \
+#   -e PASSWORD=your_password \
+#   -e SYNC_ID=your_sync_id \
+#   acutal-api 

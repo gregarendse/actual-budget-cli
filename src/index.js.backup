@@ -1,0 +1,110 @@
+#!/usr/bin/env node
+
+"use strict";
+
+import api from '@actual-app/api';
+import fs from 'fs';
+import { Command } from 'commander';
+import * as dotenv from 'dotenv';
+
+dotenv.config()
+
+// https://actual.arendse.nom.za/accounts/7c01414b-79a2-4d8e-b31d-80d9886c71f3
+
+const syncId = process.env.SYNC_ID;
+
+// GoCardless API Rate Limits
+
+// Validate required environment variables
+const requiredEnvVars = ['DATA_DIR', 'SERVER_URL', 'PASSWORD', 'SYNC_ID'];
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    console.error(`Error: ${envVar} environment variable is required`);
+    console.error('Please set it in your .env file or as an environment variable');
+    process.exit(1);
+  }
+}
+
+// Initialize API connection
+async function initApi() {
+  if (!fs.existsSync(process.env.DATA_DIR)) {
+    fs.mkdirSync(process.env.DATA_DIR);
+  }
+
+  await api.init({
+    dataDir: process.env.DATA_DIR,
+    serverURL: process.env.SERVER_URL,
+    password: process.env.PASSWORD,
+  });
+
+  await api.downloadBudget(syncId);
+}
+
+// List all accounts
+async function listAccounts() {
+  console.log('listAccounts');
+  await initApi();
+  console.log('getAccounts');
+  const accounts = await api.getAccounts();
+  
+  console.log('\nAvailable Accounts:');
+  console.log('------------------');
+  accounts.forEach((account, index) => {
+    console.log(`${index + 1}. ${account.name} (ID: ${account.id})`);
+  });
+  
+  await api.shutdown();
+}
+
+// Sync a specific account
+async function syncAccount(accountId) {
+  console.log('syncAccount', accountId);
+
+  console.log('initApi');
+  await initApi();
+  console.log('getAccounts');
+  const accounts = await api.getAccounts();
+  console.log('accounts', accounts);
+  const account = accounts.find(a => a.id === accountId);
+  
+  if (!account) {
+    console.error(`Account with ID ${accountId} not found`);
+    await api.shutdown();
+    return;
+  }
+
+  console.log(`Running bank sync for account ${account.name}`);
+  try {
+    await api.runBankSync(account.id);
+    console.log(`Completed Bank sync for account ${account.name}`);
+  } catch (err) {
+    console.error(`Error syncing account ${account.name}: ${err}`);
+    if (err.message && err.message.includes('rate limit')) {
+      console.log(`Rate limit hit for account ${account.name}. Please try again later.`);
+    }
+  }
+
+  await api.shutdown();
+}
+
+// Set up CLI commands
+const program = new Command();
+
+program
+  .name('actual-api')
+  .description('CLI for Actual API operations')
+  .version('1.0.0');
+
+program
+  .command('list')
+  .description('List all available accounts')
+  .action(listAccounts);
+
+program
+  .command('sync')
+  .description('Sync a specific account')
+  .argument('<accountId>', 'ID of the account to sync')
+  .action(syncAccount);
+
+// Parse command line arguments
+program.parse();

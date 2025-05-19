@@ -1,0 +1,24 @@
+{
+  "name": "acutal-api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "bin": {
+    "actual-api": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "npx tsc",
+    "bundle": "esbuild src/index.ts --bundle --platform=node --target=node22 --outfile=dist/index.bundled.js"
+  },
+  "dependencies": {
+    "@actual-app/api": "^25.4.0",
+    "commander": "^12.0.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.19",
+    "esbuild": "^0.25.4",
+    "postject": "^1.0.0-alpha.6",
+    "typescript": "^5.8.3"
+  }
+}
